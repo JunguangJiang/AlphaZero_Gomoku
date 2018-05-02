@@ -1,3 +1,13 @@
+# AlphaZero-Six
+## 连六棋的深度强化学习AI
+### 相对于AlphaZero-Gomoku(说明文档见下方）的改变计划
+1. 提供了完善的命令行参数，方便神经网络训练时的调参
+2. 动态绘制训练过程的损失和熵
+3. 游戏规则的完善：增加时间限制
+4. 增加图形界面
+5. 游戏规则的改变：原先的五子棋（不论禁手不禁手都存在黑方必胜的问题），改成连六棋后，大大增加了公平性。
+6. 棋盘大小的增加，通过使用GPU训练模型，提供训练速度。
+
 ## AlphaZero-Gomoku
 This is an implementation of the AlphaZero algorithm for playing the simple board game Gomoku (also called Gobang or Five in a Row) from pure self-play training. The game Gomoku is much simpler than Go or chess, so that we can focus on the training scheme of AlphaZero and obtain a pretty good AI model on a single PC in a few hours. 
 

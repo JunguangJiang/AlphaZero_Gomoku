@@ -92,7 +92,7 @@ if __name__ == '__main__':
         elif op == "-m":
             n_playout = int(value)
         elif op == "-i":
-            file_name = value
+            model_file = value
         elif op == "--human_first":
             ai_first=False
     run(height=height, width=width, n_in_row=n_in_row, use_gpu=use_gpu, n_playout=n_playout,

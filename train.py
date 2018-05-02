@@ -21,7 +21,7 @@ from policy_value_net_pytorch import PolicyValueNet  # Pytorch
 class TrainPipeline():
     def __init__(self, init_model=None, board_width=6, board_height=6,
                  n_in_row=4, n_playout=400, use_gpu=False, is_shown=False,
-                 file_name=""):
+                 file_name="", game_batch_number=1500):
         # params of the board and the game
         self.board_width = board_width
         self.board_height = board_height
@@ -43,7 +43,7 @@ class TrainPipeline():
         self.epochs = 5  # num of train_steps for each update
         self.kl_targ = 0.02
         self.check_freq = 50
-        self.game_batch_num = 1500
+        self.game_batch_num = game_batch_number
         self.best_win_ratio = 0.0
         # num of simulations used for the pure mcts, which is used as
         # the opponent to evaluate the trained policy
@@ -166,6 +166,10 @@ class TrainPipeline():
 
     def run(self):
         """run the training pipeline"""
+        loss_file = open("info/loss.txt",'w')
+        loss_file.write("self-play次数,loss,entropy\n")
+        win_ratio_file = open("info/win_ration.txt", 'w')
+        win_ratio_file.write("self-play次数, pure_MCTS战力， 胜率\n")
         try:
             for i in range(self.game_batch_num):
                 self.collect_selfplay_data(self.play_batch_size)
@@ -173,11 +177,13 @@ class TrainPipeline():
                         i+1, self.episode_len))
                 if len(self.data_buffer) > self.batch_size:
                     loss, entropy = self.policy_update()
+                    loss_file.write(str(i+1)+','+str(loss)+','+str(entropy)+'\n')
                 # check the performance of the current model,
                 # and save the model params
                 if (i+1) % self.check_freq == 0:
                     print("current self-play batch: {}".format(i+1))
                     win_ratio = self.policy_evaluate()
+                    win_ratio_file.write(str(i+1)+','+str(self.pure_mcts_playout_num)+','+str(win_ratio)+'\n')
                     self.policy_value_net.save_model('./model/'+str(self.board_height)
                                                      +'_'+str(self.board_width)
                                                      +'_'+str(self.n_in_row)+
@@ -196,14 +202,18 @@ class TrainPipeline():
                             self.best_win_ratio = 0.0
         except KeyboardInterrupt:
             print('\n\rquit')
+        loss_file.close()
+        win_ratio_file.close()
 
 def usage():
     print("-s 设置棋盘大小，默认为6")
     print("-r 设置是几子棋，默认为4")
     print("-m 设置每步棋执行MCTS模拟的次数，默认为400")
     print("-o 训练好的模型存入文件的标识符（注意：程序会根据模型的参数自动生成文件名的前半部分）")
+    print("-n 设置训练局数，默认为1500")
     print("--use_gpu 使用GPU进行训练")
     print("--graphics 当进行模型评估时，显示对战界面")
+
 
 if __name__ == '__main__':
     import sys, getopt
@@ -215,8 +225,9 @@ if __name__ == '__main__':
     n_playout = 400
     is_shown = False
     file_name = ""
+    game_batch_number = 1500
 
-    opts, args = getopt.getopt(sys.argv[1:], "hs:r:m:go:", ["use_gpu", "graphics"])
+    opts, args = getopt.getopt(sys.argv[1:], "hs:r:m:go:n:", ["use_gpu", "graphics"])
     for op, value in opts:
         if op == "-h":
             usage()
@@ -233,9 +244,11 @@ if __name__ == '__main__':
             is_shown = True
         elif op == "-o":
             file_name = value
+        elif op == "-n":
+            game_batch_number = int(value)
 
     training_pipeline = TrainPipeline(board_height=height, board_width=width,
                                       n_in_row=n_in_row, use_gpu=use_gpu,
                                       n_playout=n_playout, is_shown=is_shown,
-                                      file_name=file_name)
+                                      file_name=file_name, game_batch_number=game_batch_number)
     training_pipeline.run()
