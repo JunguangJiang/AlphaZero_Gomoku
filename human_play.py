@@ -24,18 +24,21 @@ class Human(object):
     def set_player_ind(self, p):
         self.player = p
 
-    def get_action(self, board):
+    def get_action(self, board, number=1):
         try:
-            location = input("Your move: ")
-            if isinstance(location, str):  # for python3
-                location = [int(n, 10) for n in location.split(",")]
-            move = board.location_to_move(location)
+            moves = []
+            while len(moves) < number:
+                location = input("Your move: ")
+                if isinstance(location, str):  # for python3
+                    location = [int(n, 10) for n in location.split(",")]
+                move = board.location_to_move(location)
+                if move == -1 or move not in board.availables:
+                    print("invalid move")
+                else:
+                    moves.append(move)
         except Exception as e:
-            move = -1
-        if move == -1 or move not in board.availables:
-            print("invalid move")
-            move = self.get_action(board)
-        return move
+            moves = -1
+        return moves
 
     def __str__(self):
         return "Human {}".format(self.player)

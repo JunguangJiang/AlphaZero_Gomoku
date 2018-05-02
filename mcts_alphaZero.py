@@ -40,13 +40,18 @@ class TreeNode(object):
             if action not in self._children:
                 self._children[action] = TreeNode(self, prob)
 
-    def select(self, c_puct):
+    def select(self, c_puct, number=1):
         """Select action among children that gives maximum action value Q
         plus bonus u(P).
         Return: A tuple of (action, next_node)
         """
-        return max(self._children.items(),
-                   key=lambda act_node: act_node[1].get_value(c_puct))
+        children = copy.deepcopy(self._children)
+        selected = []
+        for i in range(number):
+            action_node = max(children.items(), key=lambda item: item[1].get_value(c_puct))
+            del children[action_node[0]]
+            selected.append(action_node)
+        return selected
 
     def update(self, leaf_value):
         """Update node values from leaf evaluation.
@@ -113,8 +118,11 @@ class MCTS(object):
             if node.is_leaf():
                 break
             # Greedily select next move.
-            action, node = node.select(self._c_puct)
-            state.do_move(action)
+            selected = node.select(self._c_puct)
+            actions = []
+            for action, node in selected:
+                actions.append(action)
+            state.do_moves(actions)
 
         # Evaluate the leaf using a network which outputs a list of
         # (action, probability) tuples p and also a score v in [-1, 1]
@@ -154,10 +162,17 @@ class MCTS(object):
 
         return acts, act_probs
 
-    def update_with_move(self, last_move):
+    def update_with_moves(self, last_moves):
         """Step forward in the tree, keeping everything we already know
         about the subtree.
         """
+        for last_move in last_moves:
+            self.update_with_move(last_move)
+
+    def update_with_move(self, last_move):
+        """Step forward in the tree, keeping everything we already know
+                about the subtree.
+                """
         if last_move in self._root._children:
             self._root = self._root._children[last_move]
             self._root._parent = None
@@ -182,7 +197,14 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, board, temp=1e-3, return_prob=0):
+    def get_action(self, board, temp=1e-3, return_prob=0, number=1):
+        """
+        :param board:
+        :param temp:
+        :param return_prob:
+        :param number: 一次下棋的个数
+        :return:
+        """
         sensible_moves = board.availables
         # the pi vector returned by MCTS as in the alphaGo Zero paper
         move_probs = np.zeros(board.width*board.height)
@@ -192,25 +214,34 @@ class MCTSPlayer(object):
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for
                 # self-play training)
-                move = np.random.choice(
-                    acts,
-                    p=0.75*probs + 0.25*np.random.dirichlet(0.3*np.ones(len(probs)))
-                )
+                moves = set()
+                while len(moves) < number:
+                    moves.add(np.random.choice(
+                        acts,
+                        p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs))),
+                    ))
+                moves = list(moves)
+
                 # update the root node and reuse the search tree
-                self.mcts.update_with_move(move)
+                self.mcts.update_with_moves(moves)
             else:
                 # with the default temp=1e-3, it is almost equivalent
                 # to choosing the move with the highest prob
-                move = np.random.choice(acts, p=probs)
+                moves = set()
+                while len(moves) < number:
+                    moves.add(np.random.choice(
+                        acts,
+                        p=probs
+                    ))
+                moves = list(moves)
                 # reset the root node
-                self.mcts.update_with_move(-1)
+                self.mcts.update_with_moves([-1])
 #                location = board.move_to_location(move)
 #                print("AI move: %d,%d\n" % (location[0], location[1]))
-
             if return_prob:
-                return move, move_probs
+                return moves, move_probs
             else:
-                return move
+                return moves
         else:
             print("WARNING: the board is full")
 

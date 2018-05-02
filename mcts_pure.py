@@ -147,7 +147,7 @@ class MCTS(object):
                 break
             action_probs = rollout_policy_fn(state)
             max_action = max(action_probs, key=itemgetter(1))[0]
-            state.do_move(max_action)
+            state.do_moves(max_action)
         else:
             # If no break from the loop, issue a warning.
             print("WARNING: rollout reached move limit")
@@ -156,17 +156,21 @@ class MCTS(object):
         else:
             return 1 if winner == player else -1
 
-    def get_move(self, state):
+    def get_move(self, state, number):
         """Runs all playouts sequentially and returns the most visited action.
         state: the current game state
 
-        Return: the selected action
+        Return: the selected actions
         """
         for n in range(self._n_playout):
             state_copy = copy.deepcopy(state)
             self._playout(state_copy)
-        return max(self._root._children.items(),
-                   key=lambda act_node: act_node[1]._n_visits)[0]
+        children = copy.deepcopy(self._root._children)
+        selectedActions = []
+        for i in range(number):
+            action = max(children.items(), key=lambda item: item[1]._n_visits)[0]
+            del children[action]
+            selectedActions.append(action)
 
     def update_with_move(self, last_move):
         """Step forward in the tree, keeping everything we already know
@@ -193,10 +197,10 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, board):
+    def get_action(self, board, number=1):
         sensible_moves = board.availables
         if len(sensible_moves) > 0:
-            move = self.mcts.get_move(board)
+            move = self.mcts.get_move(board,number=number)
             self.mcts.update_with_move(-1)
             return move
         else:
@@ -204,3 +208,10 @@ class MCTSPlayer(object):
 
     def __str__(self):
         return "MCTS {}".format(self.player)
+
+# if __name__ == '__main__':
+#     from game import Board
+#     p = MCTSPlayer(n_playout=100)
+#     board = Board()
+#     board.init_board()
+#     move = p.get_action(board=board, number=6)

@@ -74,14 +74,18 @@ class Board(object):
             square_state[3][:, :] = 1.0  # indicate the colour to play
         return square_state[:, ::-1, :]
 
-    def do_move(self, move):
+    def _do_move(self, move):
         self.states[move] = self.current_player
         self.availables.remove(move)
+
+    def do_moves(self, moves):
+        for move in moves:
+            self._do_move(move)
         self.current_player = (
             self.players[0] if self.current_player == self.players[1]
             else self.players[1]
         )
-        self.last_move = move
+        self.last_moves = moves
 
     def has_a_winner(self):
         width = self.width
@@ -171,11 +175,16 @@ class Game(object):
         players = {p1: player1, p2: player2}
         if is_shown:
             self.graphic(self.board, player1.player, player2.player)
+        is_first = True # 是否是第一个下棋
         while True:
             current_player = self.board.get_current_player()
             player_in_turn = players[current_player]
-            move = player_in_turn.get_action(self.board)
-            self.board.do_move(move)
+            if is_first: # 第一次下棋只能下一个棋子
+                moves = player_in_turn.get_action(self.board, number=1)
+                is_first = False
+            else: # 此后都可以下两个
+                moves = player_in_turn.get_action(self.board, number=2)
+            self.board.do_moves(moves)
             if is_shown:
                 self.graphic(self.board, player1.player, player2.player)
             end, winner = self.board.game_end()
@@ -194,16 +203,25 @@ class Game(object):
         self.board.init_board()
         p1, p2 = self.board.players
         states, mcts_probs, current_players = [], [], []
+        is_first = True # 是否是第一个下棋
         while True:
-            move, move_probs = player.get_action(self.board,
-                                                 temp=temp,
-                                                 return_prob=1)
+            if is_first: # 第一次下棋只能下一个棋子
+                moves, move_probs = player.get_action(self.board,
+                                                     temp=temp,
+                                                     return_prob=1,
+                                                     number=1)
+                is_first = False
+            else: # 此后都可以下两个
+                moves, move_probs = player.get_action(self.board,
+                                                     temp=temp,
+                                                     return_prob=1,
+                                                     number=2)
             # store the data
             states.append(self.board.current_state())
             mcts_probs.append(move_probs)
             current_players.append(self.board.current_player)
             # perform a move
-            self.board.do_move(move)
+            self.board.do_moves(moves)
             if is_shown:
                 self.graphic(self.board, p1, p2)
             end, winner = self.board.game_end()
