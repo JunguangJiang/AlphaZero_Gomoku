@@ -4,18 +4,13 @@ human VS AI models
 Input your move in the format: 2,3
 
 @author: Junxiao Song
+@modifier: Junguang Jiang
 """
 
 from __future__ import print_function
-import pickle
 from game import Board, Game
-from mcts_pure import MCTSPlayer as MCTS_Pure
 from mcts_alphaZero import MCTSPlayer
-from policy_value_net_numpy import PolicyValueNetNumpy
-# from policy_value_net import PolicyValueNet  # Theano and Lasagne
-# from policy_value_net_pytorch import PolicyValueNet  # Pytorch
-# from policy_value_net_tensorflow import PolicyValueNet # Tensorflow
-# from policy_value_net_keras import PolicyValueNet  # Keras
+from policy_value_net_pytorch import PolicyValueNet  # Pytorch
 
 
 class Human(object):
@@ -46,42 +41,59 @@ class Human(object):
         return "Human {}".format(self.player)
 
 
-def run():
-    n = 5
-    width, height = 8, 8
-    model_file = 'best_policy_8_8_5.model'
+def run(n_in_row, width, height,
+        model_file, ai_first,
+        n_playout, use_gpu):
     try:
-        board = Board(width=width, height=height, n_in_row=n)
+        board = Board(width=width, height=height, n_in_row=n_in_row)
         game = Game(board)
 
         # ############### human VS AI ###################
-        # load the trained policy_value_net in either Theano/Lasagne, PyTorch or TensorFlow
-
-        # best_policy = PolicyValueNet(width, height, model_file = model_file)
-        # mcts_player = MCTSPlayer(best_policy.policy_value_fn, c_puct=5, n_playout=400)
-
-        # load the provided model (trained in Theano/Lasagne) into a MCTS player written in pure numpy
-        try:
-            policy_param = pickle.load(open(model_file, 'rb'))
-        except:
-            policy_param = pickle.load(open(model_file, 'rb'),
-                                       encoding='bytes')  # To support python3
-        best_policy = PolicyValueNetNumpy(width, height, policy_param)
-        mcts_player = MCTSPlayer(best_policy.policy_value_fn,
-                                 c_puct=5,
-                                 n_playout=400)  # set larger n_playout for better performance
-
-        # uncomment the following line to play with pure MCTS (it's much weaker even with a larger n_playout)
-        # mcts_player = MCTS_Pure(c_puct=5, n_playout=1000)
-
-        # human player, input your move in the format: 2,3
+        best_policy = PolicyValueNet(width, height, model_file=model_file, use_gpu=use_gpu)
+        mcts_player = MCTSPlayer(best_policy.policy_value_fn, c_puct=5, n_playout=n_playout)
         human = Human()
 
         # set start_player=0 for human first
-        game.start_play(human, mcts_player, start_player=1, is_shown=1)
+        game.start_play(human, mcts_player, start_player=ai_first, is_shown=1)
     except KeyboardInterrupt:
         print('\n\rquit')
 
+def usage():
+    print("-s 设置棋盘大小，默认为6")
+    print("-r 设置是几子棋，默认为4")
+    print("-m 设置每步棋执行MCTS模拟的次数，默认为400")
+    print("-i ai使用哪个文件中的模型，默认为model/6_6_4_best_policy.model")
+    print("--use_gpu 使用GPU进行运算")
+    print("--human_first 让人类先下")
+
 
 if __name__ == '__main__':
-    run()
+    import sys, getopt
+
+    height = 6
+    width = 6
+    n_in_row = 4
+    use_gpu = False
+    n_playout = 400
+    model_file = "model/6_6_4_best_policy.model"
+    ai_first=True
+
+    opts, args = getopt.getopt(sys.argv[1:], "hs:r:m:i:", ["use_gpu", "graphics", "human_first"])
+    for op, value in opts:
+        if op == "-h":
+            usage()
+            sys.exit()
+        elif op == "-s":
+            height = width = int(value)
+        elif op == "-r":
+            n_in_row = int(value)
+        elif op == "--use_gpu":
+            use_gpu = True
+        elif op == "-m":
+            n_playout = int(value)
+        elif op == "-i":
+            file_name = value
+        elif op == "--human_first":
+            ai_first=False
+    run(height=height, width=width, n_in_row=n_in_row, use_gpu=use_gpu, n_playout=n_playout,
+        model_file=model_file, ai_first=ai_first)

@@ -99,8 +99,8 @@ class Board(object):
             player = states[m]
 
             if (w in range(width - n + 1) and
-                    len(set(states.get(i, -1) for i in range(m, m + n))) == 1):
-                return True, player
+                    len(set(states.get(i, -1) for i in range(m, m + n))) == 1): # 如果自[h,w]起，横排n个元素的颜色只有一种
+                return True, player # 则游戏结束，返回赢家
 
             if (h in range(height - n + 1) and
                     len(set(states.get(i, -1) for i in range(m, m + n * width, width))) == 1):

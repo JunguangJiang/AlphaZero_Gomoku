@@ -12,18 +12,20 @@ from collections import defaultdict, deque
 from game import Board, Game
 from mcts_pure import MCTSPlayer as MCTS_Pure
 from mcts_alphaZero import MCTSPlayer
-from policy_value_net import PolicyValueNet  # Theano and Lasagne
-# from policy_value_net_pytorch import PolicyValueNet  # Pytorch
+#from policy_value_net import PolicyValueNet  # Theano and Lasagne
+from policy_value_net_pytorch import PolicyValueNet  # Pytorch
 # from policy_value_net_tensorflow import PolicyValueNet # Tensorflow
 # from policy_value_net_keras import PolicyValueNet # Keras
 
 
 class TrainPipeline():
-    def __init__(self, init_model=None):
+    def __init__(self, init_model=None, board_width=6, board_height=6,
+                 n_in_row=4, n_playout=400, use_gpu=False, is_shown=False,
+                 file_name=""):
         # params of the board and the game
-        self.board_width = 6
-        self.board_height = 6
-        self.n_in_row = 4
+        self.board_width = board_width
+        self.board_height = board_height
+        self.n_in_row = n_in_row
         self.board = Board(width=self.board_width,
                            height=self.board_height,
                            n_in_row=self.n_in_row)
@@ -32,7 +34,7 @@ class TrainPipeline():
         self.learn_rate = 2e-3
         self.lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
         self.temp = 1.0  # the temperature param
-        self.n_playout = 400  # num of simulations for each move
+        self.n_playout = n_playout  # num of simulations for each move
         self.c_puct = 5
         self.buffer_size = 10000
         self.batch_size = 512  # mini-batch size for training
@@ -46,19 +48,19 @@ class TrainPipeline():
         # num of simulations used for the pure mcts, which is used as
         # the opponent to evaluate the trained policy
         self.pure_mcts_playout_num = 1000
-        if init_model:
-            # start training from an initial policy-value net
-            self.policy_value_net = PolicyValueNet(self.board_width,
-                                                   self.board_height,
-                                                   model_file=init_model)
-        else:
-            # start training from a new policy-value net
-            self.policy_value_net = PolicyValueNet(self.board_width,
-                                                   self.board_height)
+        self.use_gpu = use_gpu
+        self.is_shown = is_shown
+        self.file_name = file_name
+        self.policy_value_net = PolicyValueNet(self.board_width,
+                                               self.board_height,
+                                               model_file=init_model,
+                                               use_gpu=self.use_gpu
+                                               )
         self.mcts_player = MCTSPlayer(self.policy_value_net.policy_value_fn,
                                       c_puct=self.c_puct,
                                       n_playout=self.n_playout,
                                       is_selfplay=1)
+
 
     def get_equi_data(self, play_data):
         """augment the data set by rotation and flipping
@@ -154,7 +156,7 @@ class TrainPipeline():
             winner = self.game.start_play(current_mcts_player,
                                           pure_mcts_player,
                                           start_player=i % 2,
-                                          is_shown=0)
+                                          is_shown=self.is_shown)
             win_cnt[winner] += 1
         win_ratio = 1.0*(win_cnt[1] + 0.5*win_cnt[-1]) / n_games
         print("num_playouts:{}, win: {}, lose: {}, tie:{}".format(
@@ -176,12 +178,18 @@ class TrainPipeline():
                 if (i+1) % self.check_freq == 0:
                     print("current self-play batch: {}".format(i+1))
                     win_ratio = self.policy_evaluate()
-                    self.policy_value_net.save_model('./current_policy.model')
+                    self.policy_value_net.save_model('./model/'+str(self.board_height)
+                                                     +'_'+str(self.board_width)
+                                                     +'_'+str(self.n_in_row)+
+                                                     '_current_policy_'+file_name+'.model')
                     if win_ratio > self.best_win_ratio:
                         print("New best policy!!!!!!!!")
                         self.best_win_ratio = win_ratio
                         # update the best_policy
-                        self.policy_value_net.save_model('./best_policy.model')
+                        self.policy_value_net.save_model('./model/'+str(self.board_height)
+                                                     +'_'+str(self.board_width)
+                                                     +'_'+str(self.n_in_row)+
+                                                     '_best_policy_'+file_name+'.model')
                         if (self.best_win_ratio == 1.0 and
                                 self.pure_mcts_playout_num < 5000):
                             self.pure_mcts_playout_num += 1000
@@ -189,7 +197,45 @@ class TrainPipeline():
         except KeyboardInterrupt:
             print('\n\rquit')
 
+def usage():
+    print("-s 设置棋盘大小，默认为6")
+    print("-r 设置是几子棋，默认为4")
+    print("-m 设置每步棋执行MCTS模拟的次数，默认为400")
+    print("-o 训练好的模型存入文件的标识符（注意：程序会根据模型的参数自动生成文件名的前半部分）")
+    print("--use_gpu 使用GPU进行训练")
+    print("--graphics 当进行模型评估时，显示对战界面")
 
 if __name__ == '__main__':
-    training_pipeline = TrainPipeline()
+    import sys, getopt
+
+    height = 6
+    width = 6
+    n_in_row = 4
+    use_gpu = False
+    n_playout = 400
+    is_shown = False
+    file_name = ""
+
+    opts, args = getopt.getopt(sys.argv[1:], "hs:r:m:go:", ["use_gpu", "graphics"])
+    for op, value in opts:
+        if op == "-h":
+            usage()
+            sys.exit()
+        elif op == "-s":
+            height = width = int(value)
+        elif op == "-r":
+            n_in_row = int(value)
+        elif op == "--use_gpu":
+            use_gpu = True
+        elif op == "-m":
+            n_playout = int(value)
+        elif op == "-g" or op == "--graphics":
+            is_shown = True
+        elif op == "-o":
+            file_name = value
+
+    training_pipeline = TrainPipeline(board_height=height, board_width=width,
+                                      n_in_row=n_in_row, use_gpu=use_gpu,
+                                      n_playout=n_playout, is_shown=is_shown,
+                                      file_name=file_name)
     training_pipeline.run()
